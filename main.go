@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fsnotify/fsnotify"
+	"github.com/xh-dev-go/xhUtils/flagUtils/flagBool"
 	"github.com/xh-dev-go/xhUtils/flagUtils/flagString"
 	"log"
 	"net/http"
@@ -41,18 +42,54 @@ func save(pumlUrl string, fileName string) {
 			}
 			defer f.Close()
 			f.ReadFrom(resp.Body)
+		} else {
+			println("Error: " + resp.Status)
 		}
 	}
 
 }
 
+type handler func(path string)
+
+func wallThroughDirectory(dir string, fn handler) {
+	fn(dir)
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			newFileName := dir + "/" + file.Name()
+			wallThroughDirectory(newFileName, fn)
+		}
+	}
+}
+
 func main() {
-	urlFlag := flagString.NewDefault("url", "https://plantuml.com/", "The default url to use").BindCmd()
-	//urlFlag := flagString.NewDefault("url", "http://localhost:4567/", "The default url to use").BindCmd()
+	showOnlyFlag := flagBool.NewDefault("showOnly", "Show the directory to be add only", false).BindCmd()
+	dirFlag := flagString.NewDefault("dir", ".", "The directory to be watched").BindCmd()
+	urlFlag := flagString.NewDefault("url", "https://plantuml.com/plantuml", "The default url to use").BindCmd()
 	flag.Parse()
+
+	if showOnlyFlag.Value() {
+		wallThroughDirectory(dirFlag.Value(), func(path string) {
+			println("To be added path: " + path)
+		})
+		return
+	}
+
 	pumlUrl := urlFlag.Value()
 
 	watcher, err := fsnotify.NewWatcher()
+	wallThroughDirectory(dirFlag.Value(), func(path string) {
+		//println("Adding path: " + path)
+		watcher.Add(path)
+	})
+
+	for _, item := range watcher.WatchList() {
+		println("Watch list: " + item)
+	}
 
 	if err != nil {
 		log.Fatalln("NewWatcher failed: ", err)
