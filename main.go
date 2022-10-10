@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -13,8 +14,17 @@ import (
 	"strings"
 )
 
+func refresh(pumlUrl, dir string) {
+	wallThroughDirectory(dir, func(path string) {}, func(path string) {
+		if strings.HasSuffix(path, ".puml") {
+			save(pumlUrl, path)
+		}
+	})
+}
+
 func save(pumlUrl string, fileName string) {
-	rawFileName := strings.Split(fileName, ".")[0]
+	fmt.Println("Process: " + fileName)
+	rawFileName := fileName[0 : len(fileName)-5]
 	b, err := os.ReadFile(fileName)
 	if err != nil {
 		panic(err)
@@ -51,17 +61,19 @@ func save(pumlUrl string, fileName string) {
 
 type handler func(path string)
 
-func wallThroughDirectory(dir string, fn handler) {
-	fn(dir)
+func wallThroughDirectory(dir string, handleDirectory handler, handleFile handler) {
+	handleDirectory(dir)
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		panic(err)
 	}
 
 	for _, file := range files {
+		newFileName := dir + "/" + file.Name()
 		if file.IsDir() {
-			newFileName := dir + "/" + file.Name()
-			wallThroughDirectory(newFileName, fn)
+			wallThroughDirectory(newFileName, handleDirectory, handleFile)
+		} else {
+			handleFile(newFileName)
 		}
 	}
 }
@@ -73,19 +85,25 @@ func main() {
 	flag.Parse()
 
 	if showOnlyFlag.Value() {
-		wallThroughDirectory(dirFlag.Value(), func(path string) {
-			println("To be added path: " + path)
-		})
+		wallThroughDirectory(dirFlag.Value(),
+			func(path string) {
+				println("To be added path: " + path)
+			},
+			func(path string) {},
+		)
 		return
 	}
 
 	pumlUrl := urlFlag.Value()
 
+	fmt.Println("Refresh all puml files before start watching")
+	refresh(pumlUrl, dirFlag.Value())
+	fmt.Println("Complete - Refresh all puml files before start watching")
+
 	watcher, err := fsnotify.NewWatcher()
 	wallThroughDirectory(dirFlag.Value(), func(path string) {
-		//println("Adding path: " + path)
 		watcher.Add(path)
-	})
+	}, func(path string) {})
 
 	for _, item := range watcher.WatchList() {
 		println("Watch list: " + item)
@@ -96,10 +114,8 @@ func main() {
 	}
 
 	defer watcher.Close()
-	done := make(chan bool)
 
 	go func() {
-		defer close(done)
 
 		for {
 			select {
@@ -110,6 +126,18 @@ func main() {
 				if strings.HasSuffix(event.Name, ".puml") && (event.Op == fsnotify.Create || event.Op == fsnotify.Write) {
 					log.Printf("%s %s\n", event.Name, event.Op)
 					save(pumlUrl, event.Name)
+				}
+				file, err := os.Open(event.Name)
+				if err != nil {
+					println(err.Error())
+				}
+				fs, err := file.Stat()
+				if err != nil {
+					println(err.Error())
+				}
+				if event.Op == fsnotify.Create && fs.IsDir() {
+					println("Runtime add directory: " + event.Name)
+					watcher.Add(event.Name)
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
@@ -124,5 +152,19 @@ func main() {
 	if err != nil {
 		log.Fatal("Add failed:", err)
 	}
-	<-done
+
+	input := bufio.NewScanner(os.Stdin)
+
+	fmt.Println("Input \"refresh\" to refresh all *.puml files")
+	fmt.Println("Input \"quit\" to exit program")
+	for input.Scan() {
+		text := input.Text()
+		if text == "refresh" {
+			refresh(pumlUrl, dirFlag.Value())
+		} else if text == "quit" {
+			return
+		}
+		fmt.Println("Input \"refresh\" to refresh all *.puml files")
+		fmt.Println("Input \"quit\" to exit program")
+	}
 }
