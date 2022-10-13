@@ -8,6 +8,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/xh-dev-go/xhUtils/flagUtils/flagBool"
 	"github.com/xh-dev-go/xhUtils/flagUtils/flagString"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -42,17 +43,30 @@ func save(pumlUrl string, fileName string) {
 			outType = "svg"
 		}
 		resp, err := http.Get(fmt.Sprintf("%s/%s/%s", pumlUrl, outType, sEnc))
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				fmt.Println(err)
+			}
+		}(resp.Body)
 		if err != nil {
 			log.Printf("Error processing: " + err.Error())
 		}
-		defer resp.Body.Close()
 		if resp.StatusCode == 200 {
 			f, e := os.Create(rawFileName + "." + outType)
 			if e != nil {
-				panic(e)
+				fmt.Println(e)
 			}
-			defer f.Close()
-			f.ReadFrom(resp.Body)
+			defer func(f *os.File) {
+				err := f.Close()
+				if err != nil {
+					fmt.Println(err)
+				}
+			}(f)
+			_, err := f.ReadFrom(resp.Body)
+			if err != nil {
+				fmt.Println(err)
+			}
 		} else if resp.StatusCode == 400 {
 			println("Error: " + resp.Status)
 			println("===================")
