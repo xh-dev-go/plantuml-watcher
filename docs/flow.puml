@@ -1,4 +1,20 @@
 @startuml
 title Flow
-participant plantuml-watcher as watcher
+
+actor user
+participant "plantuml-watcher" as watcher
+participant "file to edited" as f
+
+user -> watcher
+activate watcher
+watcher -> watcher: process existing **.puml** file before start the watch loop
+watcher -> watcher: search for all directory (include sub directory)
+watcher -\\ f: watch file
+activate f
+
+loop "when the file is edited"
+    user -> f: edit file
+    f -\\ watcher: file updated
+    watcher -> watcher: sync the new version of file and gen .svg and .png
+end
 @enduml
