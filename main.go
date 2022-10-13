@@ -8,6 +8,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/xh-dev-go/xhUtils/flagUtils/flagBool"
 	"github.com/xh-dev-go/xhUtils/flagUtils/flagString"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -52,6 +53,15 @@ func save(pumlUrl string, fileName string) {
 			}
 			defer f.Close()
 			f.ReadFrom(resp.Body)
+		} else if resp.StatusCode == 400 {
+			println("Error: " + resp.Status)
+			println("===================")
+			reader, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				println(err)
+				continue
+			}
+			println(string(reader))
 		} else {
 			println("Error: " + resp.Status)
 		}
