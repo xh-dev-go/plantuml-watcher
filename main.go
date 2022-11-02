@@ -34,51 +34,53 @@ func save(pumlUrl string, fileName string) {
 	b = []byte(strings.ReplaceAll(string(b), "\n", ""))
 
 	for n := 1; n <= 2; n++ {
-		sEnc := "~h" + hex.EncodeToString(b)
-		var outType string
-		if n == 1 {
-			outType = "png"
-		}
-		if n == 2 {
-			outType = "svg"
-		}
-		resp, err := http.Get(fmt.Sprintf("%s/%s/%s", pumlUrl, outType, sEnc))
-		defer func(Body io.ReadCloser) {
-			err := Body.Close()
-			if err != nil {
-				fmt.Println(err)
+		func() {
+			sEnc := "~h" + hex.EncodeToString(b)
+			var outType string
+			if n == 1 {
+				outType = "png"
 			}
-		}(resp.Body)
-		if err != nil {
-			log.Printf("Error processing: " + err.Error())
-		}
-		if resp.StatusCode == 200 {
-			f, e := os.Create(rawFileName + "." + outType)
-			if e != nil {
-				fmt.Println(e)
+			if n == 2 {
+				outType = "svg"
 			}
-			defer func(f *os.File) {
-				err := f.Close()
+			resp, err := http.Get(fmt.Sprintf("%s/%s/%s", pumlUrl, outType, sEnc))
+			defer func(Body io.ReadCloser) {
+				err := Body.Close()
 				if err != nil {
 					fmt.Println(err)
 				}
-			}(f)
-			_, err := f.ReadFrom(resp.Body)
+			}(resp.Body)
 			if err != nil {
-				fmt.Println(err)
+				log.Printf("Error processing: " + err.Error())
+				return
 			}
-		} else if resp.StatusCode == 400 {
-			println("Error: " + resp.Status)
-			println("===================")
-			reader, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				println(err)
-				continue
+			if resp.StatusCode == 200 {
+				f, e := os.Create(rawFileName + "." + outType)
+				if e != nil {
+					fmt.Println(e)
+				}
+				defer func(f *os.File) {
+					err := f.Close()
+					if err != nil {
+						fmt.Println(err)
+					}
+				}(f)
+				_, err := f.ReadFrom(resp.Body)
+				if err != nil {
+					fmt.Println(err)
+				}
+			} else if resp.StatusCode == 400 {
+				println("Error: " + resp.Status)
+				println("===================")
+				reader, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					println(err)
+				}
+				println(string(reader))
+			} else {
+				println("Error: " + resp.Status)
 			}
-			println(string(reader))
-		} else {
-			println("Error: " + resp.Status)
-		}
+		}()
 	}
 
 }
